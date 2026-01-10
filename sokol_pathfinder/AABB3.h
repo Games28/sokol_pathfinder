@@ -1,6 +1,11 @@
 #include "linemesh.h"
+#ifndef AABB3_H
+#define AABB3_H
+
 struct AABB3 {
-   
+
+    AABB3() = default;
+
     vf3d min{ INFINITY,INFINITY,INFINITY }, max = -min;
 
     vf3d getMin() const
@@ -18,7 +23,7 @@ struct AABB3 {
         return (min + max) / 2;
     }
 
-  
+
 
 
     bool contains(const vf3d& p) const
@@ -45,7 +50,7 @@ struct AABB3 {
         if (p.z > max.z) max.z = p.z;
     }
 
-} aabb3;
+};
 
 
 bool rayIntersectBox(const vf3d& orig, const vf3d& dir, const AABB3& box) {
@@ -138,7 +143,7 @@ void setupAABBRender() {
 
 
 
-void renderAABB(sg_pipeline& line_pip,const vf3d& a, const vf3d& b, mat4 view_proj) {
+void renderAABB(sg_pipeline& line_pip, const vf3d& a, const vf3d& b, mat4 view_proj) {
     mat4 trans = mat4::makeTranslation(a);
     mat4 scl = mat4::makeScale(b - a);
     mat4 model = mat4::mul(trans, scl);
@@ -157,3 +162,9 @@ void renderAABB(sg_pipeline& line_pip,const vf3d& a, const vf3d& b, mat4 view_pr
 
     sg_draw(0, 2 * aabb_render.linemesh.lines.size(), 1);
 }
+
+
+
+
+#endif // !AABB#_H
+

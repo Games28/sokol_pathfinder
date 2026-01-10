@@ -7,9 +7,15 @@
 #include "shd.glsl.h"
 
 #include "math/v3d.h"
+#include "v2d.h"
 #include "math/mat4.h"
 
 #include "mesh.h"
+#include "AABB.h"
+#include "AABB3.h"
+#include "poisson_disc.h"
+#include "Triangulate.h"
+#include "Graph.h"
 
 //for time
 #include <ctime>
@@ -52,7 +58,7 @@ struct Demo : SokolEngine {
 	sg_pipeline default_pip{};
 	sg_pipeline line_pip{};
 	
-
+	Graph graph;
 	sg_sampler sampler{};
 	bool render_outlines = false;
 
@@ -64,7 +70,7 @@ struct Demo : SokolEngine {
 	std::vector<Object> objects;
 	
 	const std::vector<std::string> Structurefilenames{
-		"assets/models/deserttest.txt",
+		"assets/models/terrain.txt",
 		"assets/models/sandspeeder.txt",
 		"assets/models/tathouse1.txt",
 		"assets/models/tathouse2.txt",
@@ -145,7 +151,7 @@ struct Demo : SokolEngine {
 		Mesh& m = b.mesh;
 		auto status = Mesh::loadFromOBJ(m, Structurefilenames[0]);
 		if (!status.valid) m = Mesh::makeCube();
-		b.scale = { 1,1,1 };
+		b.scale = { 2,1,2 };
 		b.translation = { 0,-2,0 };
 		b.updateMatrixes();
 		b.tex = getTexture("assets/poust_1.png");
@@ -159,7 +165,7 @@ struct Demo : SokolEngine {
 
 		obj.tex = getTexture("assets/poust_1.png");
 		
-		obj.scale={10, .25f, 10};
+		obj.scale={1, .25f, 1};
 		obj.translation={0, -1, 0};
 		obj.updateMatrixes();
 		objects.push_back(obj);
@@ -181,7 +187,7 @@ struct Demo : SokolEngine {
 		m.updateVertexBuffer();
 		m.updateIndexBuffer();
 
-		obj.translation={0, 1, 0};
+		obj.translation={0, 5, 0};
 		obj.isbillboard = true;
 		obj.draggable = true;
 
@@ -211,6 +217,16 @@ struct Demo : SokolEngine {
 		pipeline_desc.depth.compare=SG_COMPAREFUNC_LESS_EQUAL;
 		default_pip=sg_make_pipeline(pipeline_desc);
 	}
+
+
+	//setup nodes, aabb of terrain, triangluation
+	void setupNodes()
+	{
+		Object terrian = objects[0];
+		AABB3 bounds = terrian.getAABB();
+		auto xz_pts = poissonDiscSample({ {bounds.min.x,bounds.min.z}, {bounds.max.x,bounds.max.z} }, 2);
+		int i = 0;
+	}
 #pragma endregion
 
 	void userCreate() override {
@@ -225,6 +241,8 @@ struct Demo : SokolEngine {
 		setupLights();
 		//setupPlatform();
 		setupObjects();
+
+		setupNodes();
 
 		setupBillboard();
 

@@ -7,6 +7,7 @@
 #include "linemesh.h"
 
 #include "math/mat4.h"
+#include "AABB3.h"
 
 struct Object {
 	Mesh mesh;
@@ -49,6 +50,18 @@ struct Object {
 
 		//combine & invert
 		model = mat4::mul(trans, mat4::mul(rot, scl));
+	}
+
+	AABB3 getAABB() const
+	{
+		float w = 1;
+		AABB3 box;
+		for (const auto& v : mesh.verts)
+		{
+			box.fitToEnclose(matMulVec(model, v.pos, w));
+		}
+
+		return box;
 	}
 };
 #endif

@@ -1,4 +1,6 @@
 #pragma once
+#ifndef AABB2_H
+#define AABB2_H
 
 struct AABB2 {
 	vf2d min = { INFINITY, INFINITY }, max = -min;
@@ -26,4 +28,8 @@ struct AABB2 {
 		return true;
 	}
 };
+
+
+
+#endif // !AABB2_h
 
