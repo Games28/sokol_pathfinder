@@ -151,7 +151,7 @@ struct Demo : SokolEngine {
 		Mesh& m = b.mesh;
 		auto status = Mesh::loadFromOBJ(m, Structurefilenames[0]);
 		if (!status.valid) m = Mesh::makeCube();
-		b.scale = { 2,1,2 };
+		b.scale = { 1,1,1 };
 		b.translation = { 0,-2,0 };
 		b.updateMatrixes();
 		b.tex = getTexture("assets/poust_1.png");
@@ -218,6 +218,37 @@ struct Demo : SokolEngine {
 		default_pip=sg_make_pipeline(pipeline_desc);
 	}
 
+	float nodeBasedintersectRay(Object& obj, const vf3d& orig_world, const vf3d& dir_world)
+	{
+		float w = 1;
+		mat4 inv_model = mat4::inverse(obj.model);
+		vf3d orig_local = matMulVec(inv_model, orig_world, w);
+		w = 0;
+		vf3d dir_local = matMulVec(inv_model, dir_world, w);
+
+		dir_local = dir_local.norm();
+
+		float record = -1;
+		for (const auto& t : obj.mesh.tris) {
+			float dist = obj.mesh.rayIntersectTri(
+				orig_local,
+				dir_local,
+				obj.mesh.verts[t.a].pos,
+				obj.mesh.verts[t.b].pos,
+				obj.mesh.verts[t.c].pos
+			);
+
+			if (dist < 0) continue;
+
+			//sort while iterating
+			if (record < 0 || dist < record) record = dist;
+
+
+		}
+
+		return record;
+	}
+
 
 	//setup nodes, aabb of terrain, triangluation
 	void setupNodes()
@@ -225,6 +256,22 @@ struct Demo : SokolEngine {
 		Object terrian = objects[0];
 		AABB3 bounds = terrian.getAABB();
 		auto xz_pts = poissonDiscSample({ {bounds.min.x,bounds.min.z}, {bounds.max.x,bounds.max.z} }, 2);
+
+		delaunay::Triangle t;
+		//project pts on to terrain
+		std::unordered_map<vf2d*, Node*> xz2way;
+		for (auto& p : xz_pts)
+		{
+			vf3d orig(p.x, bounds.min.y - .1f, p.y);
+			vf3d dir(0, 1, 0);
+			float dist = nodeBasedintersectRay(objects[0], orig, orig + dir);
+			graph.nodes.push_back(new Node(orig + (.2f + dist) * dir));
+			xz2way[&p] = graph.nodes.back();
+		}
+
+		//triangulate and add links
+		auto tris = delaunay::triangulate(xz_pts);
+		auto edges = delaunay::extractEdges(tris);
 		int i = 0;
 	}
 #pragma endregion
