@@ -352,7 +352,16 @@ struct Demo : SokolEngine {
 
 #pragma region UPDATE HELPERS
 	
+	void updateCameraMatrixes() {
+		mat4 look_at = mat4::makeLookAt(cam.pos, cam.pos + cam.dir, { 0, 1, 0 });
+		cam.view = mat4::inverse(look_at);
 
+		//cam proj can change with window resize
+		float asp = sapp_widthf() / sapp_heightf();
+		cam.proj = mat4::makePerspective(90, asp, .001f, 1000.f);
+
+		cam.view_proj = mat4::mul(cam.proj, cam.view);
+	}
 
 	void handleCameraLooking(float dt) {
 		//left/right
@@ -462,7 +471,7 @@ struct Demo : SokolEngine {
 		
 		handleUserInput(dt);
 	
-		
+		updateCameraMatrixes();
 
 		for (auto& obj : objects)
 		{
@@ -490,6 +499,7 @@ struct Demo : SokolEngine {
 
 	void renderNodes(Object& obj, const mat4& view_proj)
 	{
+		sg_apply_pipeline(default_pip);
 		sg_bindings bind{};
 		bind.vertex_buffers[0] = obj.mesh.vbuf;
 		bind.index_buffer = obj.mesh.ibuf;
@@ -521,7 +531,8 @@ struct Demo : SokolEngine {
 		sg_draw(0, 3 * obj.mesh.tris.size(), 1);
 	}
 
-	void renderPlatform(Object& obj,const mat4& view_proj) {
+	void renderObjects(Object& obj,const mat4& view_proj) {
+		sg_apply_pipeline(default_pip);
 		sg_bindings bind{};
 		bind.vertex_buffers[0]=obj.mesh.vbuf;
 		bind.index_buffer= obj.mesh.ibuf;
@@ -570,6 +581,7 @@ struct Demo : SokolEngine {
 	}
 	
 	void renderBillboard(Object& obj,const mat4& view_proj) {
+		sg_apply_pipeline(default_pip);
 		sg_bindings bind{};
 		bind.vertex_buffers[0] = obj.mesh.vbuf;
 		bind.index_buffer = obj.mesh.ibuf;
@@ -651,15 +663,15 @@ struct Demo : SokolEngine {
 		{
 			if (obj.isbillboard)
 			{
-				renderBillboard(obj, cam_view_proj);
+				renderBillboard(obj, cam.view_proj);
 			}
-			renderPlatform(obj, cam_view_proj);
+			renderObjects(obj, cam.view_proj);
 			
 		}
 
 		for (auto& n : Nodes)
 		{
-			renderNodes(n, cam_view_proj);
+			renderNodes(n, cam.view_proj);
 		}
 		
 		sg_end_pass();
