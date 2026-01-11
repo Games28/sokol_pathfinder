@@ -68,7 +68,8 @@ struct Demo : SokolEngine {
 	Light* mainlight;
 
 	std::vector<Object> objects;
-	
+	std::vector<Object> Nodes;
+ 	
 	const std::vector<std::string> Structurefilenames{
 		"assets/models/terrain.txt",
 		"assets/models/sandspeeder.txt",
@@ -197,7 +198,37 @@ struct Demo : SokolEngine {
 		objects.push_back(obj);
 	}
 
+	void setupNodeBillboards()
+	{
+		int count = 0;
 
+		for (auto& n : graph.nodes)
+		{
+			Object obj;
+			Mesh& m = obj.mesh;
+			m.verts = {
+				{{-.5f, .5f, 0}, {0, 0, 1}, {0, 0}},//tl
+				{{.5f, .5f, 0}, {0, 0, 1}, {1, 0}},//tr
+				{{-.5f, -.5f, 0}, {0, 0, 1}, {0, 1}},//bl
+				{{.5f, -.5f, 0}, {0, 0, 1}, {1, 1}}//br
+			};
+			m.tris = {
+				{0, 2, 1},
+				{1, 2, 3}
+			};
+			m.updateVertexBuffer();
+			m.updateIndexBuffer();
+			obj.scale = { 0.4f,0.4f,0.4f };
+			obj.translation = n->pos;
+			obj.isbillboard = true;
+			
+			obj.tex = tex_uv;
+			obj.num_x = 4, obj.num_y = 4;
+			obj.num_ttl = obj.num_x * obj.num_y;
+			Nodes.push_back(obj);
+		}
+		
+	}
 
 	//clear to bluish
 	void setupDisplayPassAction() {
@@ -272,6 +303,24 @@ struct Demo : SokolEngine {
 		//triangulate and add links
 		auto tris = delaunay::triangulate(xz_pts);
 		auto edges = delaunay::extractEdges(tris);
+		for (const auto& e : edges) {
+			auto a = xz2way[&xz_pts[e.p[0]]];
+			auto b = xz2way[&xz_pts[e.p[1]]];
+			graph.addLink(a, b);
+			graph.addLink(b, a);
+		}
+
+
+		/// check for finishing errors when objects are added
+		//remove any nodes in the way of objects
+		for (auto it = graph.nodes.begin(); it != graph.nodes.end();)
+		{
+			auto& n = *it;
+			break;
+			//check if inside any meshes
+
+		}
+
 		int i = 0;
 	}
 #pragma endregion
@@ -290,6 +339,8 @@ struct Demo : SokolEngine {
 		setupObjects();
 
 		setupNodes();
+
+		setupNodeBillboards();
 
 		setupBillboard();
 
@@ -428,11 +479,48 @@ struct Demo : SokolEngine {
 			renderObjectOutlines();
 		}
 
-		
-		
+		//update node billboards
+		for (auto& n : Nodes)
+		{
+			updateBillboard(n, dt);
+		}
 	}
 
 #pragma region RENDER HELPERS
+
+	void renderNodes(Object& obj, const mat4& view_proj)
+	{
+		sg_bindings bind{};
+		bind.vertex_buffers[0] = obj.mesh.vbuf;
+		bind.index_buffer = obj.mesh.ibuf;
+		bind.samplers[SMP_default_smp] = sampler;
+		bind.views[VIEW_default_tex] = obj.tex;
+		sg_apply_bindings(bind);
+
+		//pass transformation matrix
+		mat4 mvp = mat4::mul(view_proj, obj.model);
+		vs_params_t vs_params{};
+		std::memcpy(vs_params.u_mvp, mvp.m, sizeof(mvp.m));
+		sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
+
+		//which region of texture to sample?
+
+		fs_params_t fs_params{};
+		int row = obj.anim / obj.num_x;
+		int col = obj.anim % obj.num_x;
+		float u_left = col / float(obj.num_x);
+		float u_right = (1 + col) / float(obj.num_x);
+		float v_top = row / float(obj.num_y);
+		float v_btm = (1 + row) / float(obj.num_y);
+		fs_params.u_tl[0] = u_left;
+		fs_params.u_tl[1] = v_top;
+		fs_params.u_br[0] = u_right;
+		fs_params.u_br[1] = v_btm;
+		sg_apply_uniforms(UB_fs_params, SG_RANGE(fs_params));
+
+		sg_draw(0, 3 * obj.mesh.tris.size(), 1);
+	}
+
 	void renderPlatform(Object& obj,const mat4& view_proj) {
 		sg_bindings bind{};
 		bind.vertex_buffers[0]=obj.mesh.vbuf;
@@ -483,10 +571,10 @@ struct Demo : SokolEngine {
 	
 	void renderBillboard(Object& obj,const mat4& view_proj) {
 		sg_bindings bind{};
-		bind.vertex_buffers[0]= obj.mesh.vbuf;
-		bind.index_buffer= obj.mesh.ibuf;
-		bind.samplers[SMP_default_smp]=sampler;
-		bind.views[VIEW_default_tex]= obj.tex;
+		bind.vertex_buffers[0] = obj.mesh.vbuf;
+		bind.index_buffer = obj.mesh.ibuf;
+		bind.samplers[SMP_default_smp] = sampler;
+		bind.views[VIEW_default_tex] = obj.tex;
 		sg_apply_bindings(bind);
 
 		//pass transformation matrix
@@ -567,6 +655,11 @@ struct Demo : SokolEngine {
 			}
 			renderPlatform(obj, cam_view_proj);
 			
+		}
+
+		for (auto& n : Nodes)
+		{
+			renderNodes(n, cam_view_proj);
 		}
 		
 		sg_end_pass();

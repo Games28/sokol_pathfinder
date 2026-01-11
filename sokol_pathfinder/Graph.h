@@ -208,8 +208,10 @@ void Graph::clear()
 {
 	for (const auto& n : nodes)
 	{
-		nodes.clear();
+		delete n;
 	}
+
+	nodes.clear();
 }
 
 
