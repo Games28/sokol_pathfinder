@@ -153,7 +153,7 @@ struct Demo : SokolEngine {
 		auto status = Mesh::loadFromOBJ(m, Structurefilenames[0]);
 		if (!status.valid) m = Mesh::makeCube();
 		b.scale = { 1,1,1 };
-		b.translation = { 0,-2,0 };
+		b.translation = { 0,0,0 };
 		b.updateMatrixes();
 		b.tex = getTexture("assets/poust_1.png");
 		objects.push_back(b);
@@ -249,16 +249,10 @@ struct Demo : SokolEngine {
 		default_pip=sg_make_pipeline(pipeline_desc);
 	}
 
-	float nodeBasedintersectRay(Object& obj, const vf3d& orig_world, const vf3d& dir_world)
+	float nodeBasedintersectRay(Object& obj, const vf3d& orig_local, const vf3d& dir_local)
 	{
 		float w = 1;
-		mat4 inv_model = mat4::inverse(obj.model);
-		vf3d orig_local = matMulVec(inv_model, orig_world, w);
-		w = 0;
-		vf3d dir_local = matMulVec(inv_model, dir_world, w);
-
-		dir_local = dir_local.norm();
-
+		
 		float record = -1;
 		for (const auto& t : obj.mesh.tris) {
 			float dist = obj.mesh.rayIntersectTri(
@@ -288,14 +282,14 @@ struct Demo : SokolEngine {
 		AABB3 bounds = terrian.getAABB();
 		auto xz_pts = poissonDiscSample({ {bounds.min.x,bounds.min.z}, {bounds.max.x,bounds.max.z} }, 2);
 
-		delaunay::Triangle t;
+	
 		//project pts on to terrain
 		std::unordered_map<vf2d*, Node*> xz2way;
 		for (auto& p : xz_pts)
 		{
 			vf3d orig(p.x, bounds.min.y - .1f, p.y);
 			vf3d dir(0, 1, 0);
-			float dist = nodeBasedintersectRay(objects[0], orig, orig + dir);
+			float dist = nodeBasedintersectRay(terrian, orig, orig + dir);
 			graph.nodes.push_back(new Node(orig + (.2f + dist) * dir));
 			xz2way[&p] = graph.nodes.back();
 		}
@@ -470,6 +464,7 @@ struct Demo : SokolEngine {
 	void userUpdate(float dt) {
 		
 		handleUserInput(dt);
+		
 	
 		updateCameraMatrixes();
 
@@ -538,6 +533,7 @@ struct Demo : SokolEngine {
 		bind.index_buffer= obj.mesh.ibuf;
 		bind.samplers[SMP_default_smp]=sampler;
 		bind.views[VIEW_default_tex] = obj.tex;
+		
 		sg_apply_bindings(bind);
 
 		//pass transformation matrix
@@ -580,38 +576,38 @@ struct Demo : SokolEngine {
 		sg_draw(0, 3* obj.mesh.tris.size(), 1);
 	}
 	
-	void renderBillboard(Object& obj,const mat4& view_proj) {
-		sg_apply_pipeline(default_pip);
-		sg_bindings bind{};
-		bind.vertex_buffers[0] = obj.mesh.vbuf;
-		bind.index_buffer = obj.mesh.ibuf;
-		bind.samplers[SMP_default_smp] = sampler;
-		bind.views[VIEW_default_tex] = obj.tex;
-		sg_apply_bindings(bind);
-
-		//pass transformation matrix
-		mat4 mvp=mat4::mul(view_proj, obj.model);
-		vs_params_t vs_params{};
-		std::memcpy(vs_params.u_mvp, mvp.m, sizeof(mvp.m));
-		sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
-
-		//which region of texture to sample?
-
-		fs_params_t fs_params{};
-		int row= obj.anim/ obj.num_x;
-		int col= obj.anim% obj.num_x;
-		float u_left=col/float(obj.num_x);
-		float u_right=(1+col)/float(obj.num_x);
-		float v_top=row/float(obj.num_y);
-		float v_btm=(1+row)/float(obj.num_y);
-		fs_params.u_tl[0]=u_left;
-		fs_params.u_tl[1]=v_top;
-		fs_params.u_br[0]=u_right;
-		fs_params.u_br[1]=v_btm;
-		sg_apply_uniforms(UB_fs_params, SG_RANGE(fs_params));
-
-		sg_draw(0, 3* obj.mesh.tris.size(), 1);
-	}
+	//void renderBillboard(Object& obj,const mat4& view_proj) {
+	//	sg_apply_pipeline(default_pip);
+	//	sg_bindings bind{};
+	//	bind.vertex_buffers[0] = obj.mesh.vbuf;
+	//	bind.index_buffer = obj.mesh.ibuf;
+	//	bind.samplers[SMP_default_smp] = sampler;
+	//	bind.views[VIEW_default_tex] = obj.tex;
+	//	sg_apply_bindings(bind);
+	//
+	//	//pass transformation matrix
+	//	mat4 mvp=mat4::mul(view_proj, obj.model);
+	//	vs_params_t vs_params{};
+	//	std::memcpy(vs_params.u_mvp, mvp.m, sizeof(mvp.m));
+	//	sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
+	//
+	//	//which region of texture to sample?
+	//
+	//	fs_params_t fs_params{};
+	//	int row= obj.anim/ obj.num_x;
+	//	int col= obj.anim% obj.num_x;
+	//	float u_left=col/float(obj.num_x);
+	//	float u_right=(1+col)/float(obj.num_x);
+	//	float v_top=row/float(obj.num_y);
+	//	float v_btm=(1+row)/float(obj.num_y);
+	//	fs_params.u_tl[0]=u_left;
+	//	fs_params.u_tl[1]=v_top;
+	//	fs_params.u_br[0]=u_right;
+	//	fs_params.u_br[1]=v_btm;
+	//	sg_apply_uniforms(UB_fs_params, SG_RANGE(fs_params));
+	//
+	//	sg_draw(0, 3* obj.mesh.tris.size(), 1);
+	//}
 
 	void renderObjectOutlines()
 	{
@@ -661,17 +657,22 @@ struct Demo : SokolEngine {
 
 		for (auto& obj : objects)
 		{
-			if (obj.isbillboard)
-			{
-				renderBillboard(obj, cam.view_proj);
-			}
+			//if (obj.isbillboard)
+			//{
+			//	renderBillboard(obj, cam.view_proj);
+			//}
 			renderObjects(obj, cam.view_proj);
 			
 		}
-
+		int count = 0;
 		for (auto& n : Nodes)
 		{
+			if (count == 61)
+			{
+				int i = 0;
+			}
 			renderNodes(n, cam.view_proj);
+			count++;
 		}
 		
 		sg_end_pass();

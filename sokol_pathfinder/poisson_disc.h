@@ -8,8 +8,10 @@ V2D polar_generic(float rad, float angle) {
 	return rad * V2D(std::cosf(angle), std::sinf(angle));
 }
 
-vf2d polar(float rad, float angle) {
-	return polar_generic<vf2d>(rad, angle);
+//polar to cartesian helper
+template<typename V2D>
+V2D polar(float rad, float angle) {
+	return rad * V2D(std::cos(angle), std::sin(angle));
 }
 
 std::vector<vf2d> poissonDiscSample(const AABB2& box, float rad)
@@ -29,7 +31,7 @@ std::vector<vf2d> poissonDiscSample(const AABB2& box, float rad)
 	while (spawn_pts.size()) {
 		//choose random spawn pt
 		auto it = spawn_pts.begin();
-		std::advance(it, rand() % spawn_pts.size());
+		std::advance(it, std::rand() % spawn_pts.size());
 		const auto& spawn = *it;
 
 		//try n times to add pt
@@ -38,7 +40,7 @@ std::vector<vf2d> poissonDiscSample(const AABB2& box, float rad)
 		for (; k < samples; k++) {
 			float angle = randFloat(2 * Pi);
 			float dist = randFloat(rad, 2 * rad);
-			vf2d cand = spawn + polar(dist, angle);
+			vf2d cand = spawn + polar<vf2d>(dist, angle);
 			if (!box.contains(cand)) continue;
 
 			//check 3x3 region around candidate
@@ -53,7 +55,7 @@ std::vector<vf2d> poissonDiscSample(const AABB2& box, float rad)
 				for (int j = sj; j <= ej; j++) {
 					//if there is a point, and its too close,
 					const auto& idx = grid[i + w * j];
-					if (idx && (*idx - cand).mag() < rad * rad) {
+					if (idx && (*idx - cand).mag_sq() < rad * rad) {
 						//invalidate it
 						valid = false;
 						break;

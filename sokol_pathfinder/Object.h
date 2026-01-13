@@ -20,6 +20,7 @@ struct Object {
 	bool isbillboard = false;
 
 	vf3d translation, rotation, scale{ 1, 1, 1 };
+
 	mat4 model = mat4::makeIdentity();
 	int num_x = 0, num_y = 0;
 	int num_ttl = 0;
@@ -58,7 +59,7 @@ struct Object {
 		AABB3 box;
 		for (const auto& v : mesh.verts)
 		{
-			box.fitToEnclose(matMulVec(model, v.pos, w));
+			box.fitToEnclose(matMulVec(model ,v.pos, w));
 		}
 
 		return box;
