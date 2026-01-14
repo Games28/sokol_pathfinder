@@ -54,6 +54,26 @@ struct Light
 
 };
 
+struct NodeInfo
+{
+	vf3d translation, rotation, scale{ 1, 1, 1 };
+	mat4 model = mat4::makeIdentity();
+	void updateMatrixes() {
+		//xyz euler angles?
+		mat4 rot_x = mat4::makeRotX(rotation.x);
+		mat4 rot_y = mat4::makeRotY(rotation.y);
+		mat4 rot_z = mat4::makeRotZ(rotation.z);
+		mat4 rot = mat4::mul(rot_z, mat4::mul(rot_y, rot_x));
+
+		mat4 scl = mat4::makeScale(scale);
+
+		mat4 trans = mat4::makeTranslation(translation);
+
+		//combine & invert
+		model = mat4::mul(trans, mat4::mul(rot, scl));
+	}
+};
+
 struct Demo : SokolEngine {
 	sg_pipeline default_pip{};
 	sg_pipeline line_pip{};
@@ -69,9 +89,12 @@ struct Demo : SokolEngine {
 
 	std::vector<Object> objects;
 	std::vector<Object> Nodes;
+	std::vector<NodeInfo> nodeinfo;
+	Object bb_Node;
+	float node_dt = 0;
  	
 	const std::vector<std::string> Structurefilenames{
-		"assets/models/terrain.txt",
+		"assets/models/desert.txt",
 		"assets/models/sandspeeder.txt",
 		"assets/models/tathouse1.txt",
 		"assets/models/tathouse2.txt",
@@ -154,6 +177,7 @@ struct Demo : SokolEngine {
 		if (!status.valid) m = Mesh::makeCube();
 		b.scale = { 1,1,1 };
 		b.translation = { 0,0,0 };
+		
 		b.updateMatrixes();
 		b.tex = getTexture("assets/poust_1.png");
 		objects.push_back(b);
@@ -202,8 +226,9 @@ struct Demo : SokolEngine {
 	{
 		int count = 0;
 
-		for (auto& n : graph.nodes)
+		//for (auto& n : graph.nodes)
 		{
+			
 			Object obj;
 			Mesh& m = obj.mesh;
 			m.verts = {
@@ -219,15 +244,30 @@ struct Demo : SokolEngine {
 			m.updateVertexBuffer();
 			m.updateIndexBuffer();
 			obj.scale = { 0.4f,0.4f,0.4f };
-			obj.translation = n->pos;
+			obj.translation = { 0,0,0 };
 			obj.isbillboard = true;
-			
+			obj.updateMatrixes();
 			obj.tex = tex_uv;
 			obj.num_x = 4, obj.num_y = 4;
 			obj.num_ttl = obj.num_x * obj.num_y;
-			Nodes.push_back(obj);
+			//Nodes.push_back(obj);
+			bb_Node = obj;
+			
 		}
 		
+		
+	}
+
+	void graphToNode()
+	{
+		for (auto& g : graph.nodes)
+		{
+			NodeInfo node;
+			node.translation = g->pos;
+			node.scale = { 0.4f,0.4f, 0.4f };
+			node.updateMatrixes();
+			nodeinfo.push_back(node);
+		}
 	}
 
 	//clear to bluish
@@ -263,10 +303,12 @@ struct Demo : SokolEngine {
 				obj.mesh.verts[t.c].pos
 			);
 
-			if (dist < 0) continue;
-
-			//sort while iterating
-			if (record < 0 || dist < record) record = dist;
+			
+			if (dist > 0)
+			{
+				//sort while iterating
+				if (record < 0 || dist < record) record = dist;
+			}
 
 
 		}
@@ -289,7 +331,7 @@ struct Demo : SokolEngine {
 		{
 			vf3d orig(p.x, bounds.min.y - .1f, p.y);
 			vf3d dir(0, 1, 0);
-			float dist = nodeBasedintersectRay(terrian, orig, orig + dir);
+			float dist = nodeBasedintersectRay(terrian, orig,dir);
 			graph.nodes.push_back(new Node(orig + (.2f + dist) * dir));
 			xz2way[&p] = graph.nodes.back();
 		}
@@ -317,6 +359,10 @@ struct Demo : SokolEngine {
 
 		int i = 0;
 	}
+
+
+
+
 #pragma endregion
 
 	void userCreate() override {
@@ -335,6 +381,8 @@ struct Demo : SokolEngine {
 		setupNodes();
 
 		setupNodeBillboards();
+
+		graphToNode();
 
 		setupBillboard();
 
@@ -454,6 +502,26 @@ struct Demo : SokolEngine {
 		//}
 	}
 
+	void updateNodeBillboard(NodeInfo& node, float dt) {
+		//move with player 
+		vf3d eye_pos = node.translation;
+		vf3d target = cam.pos;
+
+		vf3d y_axis(0, 1, 0);
+		vf3d z_axis = (target - eye_pos).norm();
+		vf3d x_axis = y_axis.cross(z_axis).norm();
+		y_axis = z_axis.cross(x_axis);
+
+		//slightly different than makeLookAt.
+		mat4& m = node.model;
+		m(0, 0) = x_axis.x, m(0, 1) = y_axis.x, m(0, 2) = z_axis.x, m(0, 3) = eye_pos.x;
+		m(1, 0) = x_axis.y, m(1, 1) = y_axis.y, m(1, 2) = z_axis.y, m(1, 3) = eye_pos.y;
+		m(2, 0) = x_axis.z, m(2, 1) = y_axis.z, m(2, 2) = z_axis.z, m(2, 3) = eye_pos.z;
+		m(3, 3) = 1;
+
+		
+	}
+
 	
 
 	
@@ -483,11 +551,13 @@ struct Demo : SokolEngine {
 			renderObjectOutlines();
 		}
 
-		//update node billboards
-		for (auto& n : Nodes)
+		for (auto& n : nodeinfo)
 		{
-			updateBillboard(n, dt);
+			n.updateMatrixes();
+			updateNodeBillboard(n, dt);
+			
 		}
+		
 	}
 
 #pragma region RENDER HELPERS
@@ -511,19 +581,37 @@ struct Demo : SokolEngine {
 		//which region of texture to sample?
 
 		fs_params_t fs_params{};
-		int row = obj.anim / obj.num_x;
-		int col = obj.anim % obj.num_x;
-		float u_left = col / float(obj.num_x);
-		float u_right = (1 + col) / float(obj.num_x);
-		float v_top = row / float(obj.num_y);
-		float v_btm = (1 + row) / float(obj.num_y);
-		fs_params.u_tl[0] = u_left;
-		fs_params.u_tl[1] = v_top;
-		fs_params.u_br[0] = u_right;
-		fs_params.u_br[1] = v_btm;
+		fs_params.u_tl[0] = 0, fs_params.u_tl[1] = 0;
+		fs_params.u_br[0] = 1, fs_params.u_br[1] = 1;
 		sg_apply_uniforms(UB_fs_params, SG_RANGE(fs_params));
 
 		sg_draw(0, 3 * obj.mesh.tris.size(), 1);
+	}
+
+	void testrender(NodeInfo& node,const mat4& view_proj)
+	{
+		sg_apply_pipeline(default_pip);
+		sg_bindings bind{};
+		bind.vertex_buffers[0] = bb_Node.mesh.vbuf;
+		bind.index_buffer = bb_Node.mesh.ibuf;
+		bind.samplers[SMP_default_smp] = sampler;
+		bind.views[VIEW_default_tex] = bb_Node.tex;
+		sg_apply_bindings(bind);
+
+		//pass transformation matrix
+		mat4 mvp = mat4::mul(view_proj, node.model);
+		vs_params_t vs_params{};
+		std::memcpy(vs_params.u_mvp, mvp.m, sizeof(mvp.m));
+		sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
+
+		//which region of texture to sample?
+
+		fs_params_t fs_params{};
+		fs_params.u_tl[0] = 0, fs_params.u_tl[1] = 0;
+		fs_params.u_br[0] = 1, fs_params.u_br[1] = 1;
+		sg_apply_uniforms(UB_fs_params, SG_RANGE(fs_params));
+
+		sg_draw(0, 3 * bb_Node.mesh.tris.size(), 1);
 	}
 
 	void renderObjects(Object& obj,const mat4& view_proj) {
@@ -575,39 +663,8 @@ struct Demo : SokolEngine {
 
 		sg_draw(0, 3* obj.mesh.tris.size(), 1);
 	}
+
 	
-	//void renderBillboard(Object& obj,const mat4& view_proj) {
-	//	sg_apply_pipeline(default_pip);
-	//	sg_bindings bind{};
-	//	bind.vertex_buffers[0] = obj.mesh.vbuf;
-	//	bind.index_buffer = obj.mesh.ibuf;
-	//	bind.samplers[SMP_default_smp] = sampler;
-	//	bind.views[VIEW_default_tex] = obj.tex;
-	//	sg_apply_bindings(bind);
-	//
-	//	//pass transformation matrix
-	//	mat4 mvp=mat4::mul(view_proj, obj.model);
-	//	vs_params_t vs_params{};
-	//	std::memcpy(vs_params.u_mvp, mvp.m, sizeof(mvp.m));
-	//	sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
-	//
-	//	//which region of texture to sample?
-	//
-	//	fs_params_t fs_params{};
-	//	int row= obj.anim/ obj.num_x;
-	//	int col= obj.anim% obj.num_x;
-	//	float u_left=col/float(obj.num_x);
-	//	float u_right=(1+col)/float(obj.num_x);
-	//	float v_top=row/float(obj.num_y);
-	//	float v_btm=(1+row)/float(obj.num_y);
-	//	fs_params.u_tl[0]=u_left;
-	//	fs_params.u_tl[1]=v_top;
-	//	fs_params.u_br[0]=u_right;
-	//	fs_params.u_br[1]=v_btm;
-	//	sg_apply_uniforms(UB_fs_params, SG_RANGE(fs_params));
-	//
-	//	sg_draw(0, 3* obj.mesh.tris.size(), 1);
-	//}
 
 	void renderObjectOutlines()
 	{
@@ -657,22 +714,21 @@ struct Demo : SokolEngine {
 
 		for (auto& obj : objects)
 		{
-			//if (obj.isbillboard)
-			//{
-			//	renderBillboard(obj, cam.view_proj);
-			//}
+			
 			renderObjects(obj, cam.view_proj);
 			
 		}
-		int count = 0;
-		for (auto& n : Nodes)
+		
+		//for (auto& n : Nodes)
+		//{
+		//	
+		//	//renderNodes(n, cam.view_proj);
+		//	
+		//}
+
+		for (auto& n : nodeinfo)
 		{
-			if (count == 61)
-			{
-				int i = 0;
-			}
-			renderNodes(n, cam.view_proj);
-			count++;
+			testrender(n, cam.view_proj);
 		}
 		
 		sg_end_pass();

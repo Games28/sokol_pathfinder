@@ -78,7 +78,7 @@ namespace delaunay
 
 	};
 
-	std::list<Triangle> triangulate(const std::vector<vf2d>& pts_ref)
+	std::list<Triangle> triangulate( const std::vector<vf2d>& pts_ref)
 	{
 		std::list<Triangle> tris;
 		std::vector<vf2d> pts = pts_ref;
