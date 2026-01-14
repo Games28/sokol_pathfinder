@@ -94,10 +94,15 @@ struct Demo : SokolEngine {
 	float node_dt = 0;
  	
 	const std::vector<std::string> Structurefilenames{
-		"assets/models/desert.txt",
-		"assets/models/sandspeeder.txt",
-		"assets/models/tathouse1.txt",
-		"assets/models/tathouse2.txt",
+		"assets/models/terrain.txt",
+		"assets/models/house.txt",
+	};
+
+	const std::vector<std::string> texturefilenames{
+		"assets/poust_1.png",
+		//"assets/sandtexture.png",
+		"assets/sandtexture.png",
+		
 	};
 
 	sg_view tex_blank{};
@@ -109,10 +114,7 @@ struct Demo : SokolEngine {
 
 	Object platform;
 
-	float ry;
-	int cur_num_particles;
-	vf3d pos[MAX_PARTICLES];
-	vf3d vel[MAX_PARTICLES];
+	
 
 	static inline uint32_t xorshift32(void) {
 		static uint32_t x = 0x12345678;
@@ -171,29 +173,59 @@ struct Demo : SokolEngine {
 
 	void setupObjects()
 	{
+		std::vector<vf3d> coords
+		{
+			{3.54f, 1.37f, 18.2f},
+			{5.64f, 2.86f, 51.79f}, 
+			{51.31f, 1.67f, 41.95f}, 
+			{62.04f, 1.67f, -5.12f}, 
+			{12.09f, 2.16f, -38.03f},
+			{-38.35f, 2.63f, -33.38f},
+			{-52.99f, 1.43f, 16.84f},
+		};
+
+		std::vector<std::uint32_t> colors
+		{
+			0xFFFFFFFF,  //white
+			0xFF0000ff,  //blue
+			0xFFffFFff,   //white
+			0xFFff0000,   //red
+			0xFFffffff,   //white
+			0xFF00FF00,   // green
+			0xFF0000ff,   //blue
+		};
+
+	
+
+		for (int i = 0; i < coords.size(); i++)
+		{
+			Object b;
+			Mesh& m = b.mesh;
+			auto status = Mesh::loadFromOBJ(m, Structurefilenames[1]);
+			if (!status.valid) m = Mesh::makeCube();
+			 b.scale = { 1,1,1 };
+			
+			b.translation = coords[i];
+
+			b.updateMatrixes();
+			b.tex = makeColorTexture(colors[i]);
+			objects.push_back(b);
+
+		}
+	}
+
+	void setupPlatform() {
 		Object b;
 		Mesh& m = b.mesh;
 		auto status = Mesh::loadFromOBJ(m, Structurefilenames[0]);
 		if (!status.valid) m = Mesh::makeCube();
 		b.scale = { 1,1,1 };
+
 		b.translation = { 0,0,0 };
-		
+
 		b.updateMatrixes();
-		b.tex = getTexture("assets/poust_1.png");
-		objects.push_back(b);
-	}
-
-	void setupPlatform() {
-		Object obj;
-		Mesh& m=obj.mesh;
-		m=Mesh::makeCube();
-
-		obj.tex = getTexture("assets/poust_1.png");
-		
-		obj.scale={1, .25f, 1};
-		obj.translation={0, -1, 0};
-		obj.updateMatrixes();
-		objects.push_back(obj);
+		b.tex = getTexture(texturefilenames[0]);
+		platform = b;
 	}
 
 	void setupBillboard() {
@@ -316,11 +348,39 @@ struct Demo : SokolEngine {
 		return record;
 	}
 
+	bool contains(Object& obj, const vf3d& orig_local)
+	{
+		vf3d dir = vf3d(
+			.5f - randFloat(),
+			.5f - randFloat(),
+			.5f - randFloat()
+		).norm();
+
+		int num = 0;
+		for (const auto& t : obj.mesh.tris) {
+			float dist = obj.mesh.rayIntersectTri(
+				orig_local,
+				orig_local + dir,
+				obj.mesh.verts[t.a].pos,
+				obj.mesh.verts[t.b].pos,
+				obj.mesh.verts[t.c].pos
+			);
+
+
+			if (dist > 0)
+			{
+				num++;
+			}
+
+
+		}
+		return num % 2;
+	}
 
 	//setup nodes, aabb of terrain, triangluation
 	void setupNodes()
 	{
-		Object terrian = objects[0];
+		Object terrian = platform;
 		AABB3 bounds = terrian.getAABB();
 		auto xz_pts = poissonDiscSample({ {bounds.min.x,bounds.min.z}, {bounds.max.x,bounds.max.z} }, 2);
 
@@ -352,8 +412,32 @@ struct Demo : SokolEngine {
 		for (auto it = graph.nodes.begin(); it != graph.nodes.end();)
 		{
 			auto& n = *it;
-			break;
 			//check if inside any meshes
+			bool blocked = false;
+			for (int i = 0; i < objects.size(); i++)
+			{
+				if (contains(objects[i], n->pos))
+				{
+					blocked = true;
+					break;
+				}
+			}
+			if (blocked)
+			{
+				//remove corresponding links
+				for (auto& o : graph.nodes)
+				{
+					auto oit = std::find(o->links.begin(), o->links.end(), n);
+					if (oit != o->links.end()) o->links.erase(oit);
+				}
+
+				delete n;
+				it = graph.nodes.erase(it);
+			}
+			else
+			{
+				it++;
+			}
 
 		}
 
@@ -375,7 +459,9 @@ struct Demo : SokolEngine {
 		setupSampler();
 
 		setupLights();
-		//setupPlatform();
+		
+		setupPlatform();
+		
 		setupObjects();
 
 		setupNodes();
@@ -710,7 +796,7 @@ struct Demo : SokolEngine {
 		sg_apply_pipeline(default_pip);
 
 		
-		
+		renderObjects(platform, cam.view_proj);
 
 		for (auto& obj : objects)
 		{
@@ -719,12 +805,6 @@ struct Demo : SokolEngine {
 			
 		}
 		
-		//for (auto& n : Nodes)
-		//{
-		//	
-		//	//renderNodes(n, cam.view_proj);
-		//	
-		//}
 
 		for (auto& n : nodeinfo)
 		{

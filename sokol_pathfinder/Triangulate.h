@@ -82,8 +82,10 @@ namespace delaunay
 	{
 		std::list<Triangle> tris;
 		std::vector<vf2d> pts = pts_ref;
+		
 		int st_a = pts.size();
 		{
+
 			//make super Triangle
 			AABB2 box;
 			for (const auto& p : pts_ref)

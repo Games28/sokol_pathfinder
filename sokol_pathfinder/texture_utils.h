@@ -23,6 +23,11 @@ static sg_view makeBlankTexture() {
 	return makeTextureFromPixels(pixel, 1, 1);
 }
 
+static sg_view makeColorTexture(std::uint32_t color)
+{
+	std::uint32_t pixel[1]{ color };
+	return makeTextureFromPixels(pixel, 1, 1);
+}
 static sg_view makeUVTexture(int width, int height) {
 	std::uint32_t* pixels=new std::uint32_t[width*height];
 	for(int j=0; j<height; j++) {

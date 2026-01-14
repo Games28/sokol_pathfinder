@@ -115,6 +115,8 @@ struct Mesh {
 		return t;
 	}
 
+	
+
 	static vf3d getClosePt(const vf3d& pt, const vf3d& t0, const vf3d& t1, const vf3d& t2)
 	{
 		vf3d ab = t1 - t0;
