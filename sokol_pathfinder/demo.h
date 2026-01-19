@@ -94,7 +94,7 @@ struct Demo : SokolEngine {
 	float node_dt = 0;
  	
 	const std::vector<std::string> Structurefilenames{
-		"assets/models/terrain.txt",
+		"assets/models/desert.txt",
 		"assets/models/house.txt",
 	};
 
@@ -175,13 +175,13 @@ struct Demo : SokolEngine {
 	{
 		std::vector<vf3d> coords
 		{
-			{3.54f, 1.37f, 18.2f},
-			{5.64f, 2.86f, 51.79f}, 
-			{51.31f, 1.67f, 41.95f}, 
-			{62.04f, 1.67f, -5.12f}, 
-			{12.09f, 2.16f, -38.03f},
-			{-38.35f, 2.63f, -33.38f},
-			{-52.99f, 1.43f, 16.84f},
+			{-1.0f, 0.0f, -4.0f},
+			//{5.64f, 2.86f, 51.79f}, 
+			//{51.31f, 1.67f, 41.95f}, 
+			//{62.04f, 1.67f, -5.12f}, 
+			//{12.09f, 2.16f, -38.03f},
+			//{-38.35f, 2.63f, -33.38f},
+			//{-52.99f, 1.43f, 16.84f},
 		};
 
 		std::vector<std::uint32_t> colors
@@ -414,9 +414,9 @@ struct Demo : SokolEngine {
 			auto& n = *it;
 			//check if inside any meshes
 			bool blocked = false;
-			for (int i = 0; i < objects.size(); i++)
+			for (auto& obj : objects)
 			{
-				if (contains(objects[i], n->pos))
+				if (contains(obj, n->pos))
 				{
 					blocked = true;
 					break;
@@ -430,7 +430,7 @@ struct Demo : SokolEngine {
 					auto oit = std::find(o->links.begin(), o->links.end(), n);
 					if (oit != o->links.end()) o->links.erase(oit);
 				}
-
+		
 				delete n;
 				it = graph.nodes.erase(it);
 			}
@@ -438,10 +438,10 @@ struct Demo : SokolEngine {
 			{
 				it++;
 			}
-
+		
 		}
 
-		int i = 0;
+		
 	}
 
 
@@ -798,12 +798,12 @@ struct Demo : SokolEngine {
 		
 		renderObjects(platform, cam.view_proj);
 
-		for (auto& obj : objects)
-		{
-			
-			renderObjects(obj, cam.view_proj);
-			
-		}
+		//for (auto& obj : objects)
+		//{
+		//	
+		//	renderObjects(obj, cam.view_proj);
+		//	
+		//}
 		
 
 		for (auto& n : nodeinfo)
