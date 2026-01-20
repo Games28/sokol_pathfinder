@@ -52,14 +52,16 @@ public:
 		//does this graph have those nodes;
 		if (!contains(a) || !contains(b)) return false;
 
+		//doe it already exist?
 		for (const auto& n : a->links)
 		{
 			if (n == b) return false;
+		}
 
 			a->links.emplace_back(b);
 
 			return true;
-		}
+		
 	}
 
 	void removeNode(Node* said)

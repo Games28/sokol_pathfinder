@@ -34,6 +34,7 @@ struct LineMesh {
 	};
 	std::vector<IndexLine> lines;
 
+
 	sg_buffer vbuf{ SG_INVALID_ID };
 	sg_buffer ibuf{ SG_INVALID_ID };
 

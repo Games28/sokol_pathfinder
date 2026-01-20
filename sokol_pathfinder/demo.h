@@ -90,6 +90,11 @@ struct Demo : SokolEngine {
 	std::vector<Object> objects;
 	std::vector<Object> Nodes;
 	std::vector<NodeInfo> nodeinfo;
+
+	LineMesh nodelines;
+
+	Node* from_node = nullptr;
+	Node* to_node = nullptr;
 	Object bb_Node;
 	float node_dt = 0;
  	
@@ -175,8 +180,8 @@ struct Demo : SokolEngine {
 	{
 		std::vector<vf3d> coords
 		{
-			{-1.0f, 0.0f, -4.0f},
-			//{5.64f, 2.86f, 51.79f}, 
+			{0.0f, 0.0f, 0.0f},
+			//{-4.0f, 1.67f, 4.0f}, 
 			//{51.31f, 1.67f, 41.95f}, 
 			//{62.04f, 1.67f, -5.12f}, 
 			//{12.09f, 2.16f, -38.03f},
@@ -209,7 +214,7 @@ struct Demo : SokolEngine {
 
 			b.updateMatrixes();
 			b.tex = makeColorTexture(colors[i]);
-			objects.push_back(b);
+			objects.push_back(Object(m,b.tex));
 
 		}
 	}
@@ -221,11 +226,11 @@ struct Demo : SokolEngine {
 		if (!status.valid) m = Mesh::makeCube();
 		b.scale = { 1,1,1 };
 
-		b.translation = { 0,0,0 };
+		b.translation = { 2,0,-2 };
 
 		b.updateMatrixes();
 		b.tex = getTexture(texturefilenames[0]);
-		platform = b;
+		platform = Object(m,b.tex);
 	}
 
 	void setupBillboard() {
@@ -290,6 +295,72 @@ struct Demo : SokolEngine {
 		
 	}
 
+	void setupNodeLineLinks ()
+	{
+		std::unordered_map<Node*, int> lookup;
+		int i = 0;
+		nodelines.verts.clear();
+		for (const auto& n : graph.nodes)
+		{
+			LineMesh::Vertex v1;
+			v1.pos = nodeinfo[i].translation;
+			v1.col = { 1, 1, 1, 1 };
+			nodelines.verts.push_back(v1);
+			lookup[n] = i++;
+		}
+		int u = 0;
+		nodelines.updateVertexBuffer();
+
+		nodelines.lines.clear();
+		for (const auto& n : graph.nodes)
+		{
+			for (const auto& o : n->links)
+			{
+				nodelines.lines.push_back(LineMesh::IndexLine(lookup[n], lookup[o]));
+			}
+		}
+		nodelines.updateIndexBuffer();
+
+	}
+
+	float rayIntersectNode(const vf3d& orig, const vf3d& dir, const vf3d& t0, const vf3d& t1, const vf3d& t2,
+		float* uptr = nullptr, float* vptr = nullptr)
+	{
+		static const float epsilon = 1e-6f;
+
+		vf3d a = dir;
+		vf3d b = t0 - t1;
+		vf3d c = t0 - t2;
+		vf3d d = t0 - orig;
+		vf3d bxc = b.cross(c);
+		float det = a.dot(bxc);
+
+		//parallel
+		if (std::abs(det) < epsilon) return -1;
+
+		vf3d f = c.cross(a) / det;
+		float u = f.dot(d);
+		if (uptr) *uptr = u;
+
+		vf3d g = a.cross(b) / det;
+		float v = g.dot(d);
+		if (vptr) *vptr = v;
+
+		//within unit uv triangle
+		if (u < 0 || u>1) return -1;
+		if (v < 0 || v>1) return -1;
+		if (u + v > 1) return -1;
+
+		//get t
+		vf3d e = bxc / det;
+		float t = e.dot(d);
+
+		//behind ray
+		if (t < 0) return -1;
+
+		return t;
+	}
+
 	void graphToNode()
 	{
 		for (auto& g : graph.nodes)
@@ -327,12 +398,17 @@ struct Demo : SokolEngine {
 		
 		float record = -1;
 		for (const auto& t : obj.mesh.tris) {
+			float w = 1;
+			
+			vf3d p0 = matMulVec(obj.model, obj.mesh.verts[t.a].pos, w);
+			vf3d p1 = matMulVec(obj.model, obj.mesh.verts[t.b].pos, w);
+			vf3d p2 = matMulVec(obj.model, obj.mesh.verts[t.c].pos, w);
 			float dist = obj.mesh.rayIntersectTri(
 				orig_local,
 				dir_local,
-				obj.mesh.verts[t.a].pos,
-				obj.mesh.verts[t.b].pos,
-				obj.mesh.verts[t.c].pos
+				p0,
+				p1,
+				p2
 			);
 
 			
@@ -356,14 +432,21 @@ struct Demo : SokolEngine {
 			.5f - randFloat()
 		).norm();
 
+		
+		float w = 1;
 		int num = 0;
 		for (const auto& t : obj.mesh.tris) {
-			float dist = obj.mesh.rayIntersectTri(
+			
+			vf3d p0 = matMulVec(obj.model, obj.mesh.verts[t.a].pos, w);
+			vf3d p1 = matMulVec(obj.model, obj.mesh.verts[t.b].pos, w);
+			vf3d p2 = matMulVec(obj.model, obj.mesh.verts[t.c].pos, w);
+
+			float dist = rayIntersectNode(
 				orig_local,
-				orig_local + dir,
-				obj.mesh.verts[t.a].pos,
-				obj.mesh.verts[t.b].pos,
-				obj.mesh.verts[t.c].pos
+				dir,
+				p0,
+				p1,
+				p2
 			);
 
 
@@ -380,7 +463,7 @@ struct Demo : SokolEngine {
 	//setup nodes, aabb of terrain, triangluation
 	void setupNodes()
 	{
-		Object terrian = platform;
+		Object& terrian = platform;
 		AABB3 bounds = terrian.getAABB();
 		auto xz_pts = poissonDiscSample({ {bounds.min.x,bounds.min.z}, {bounds.max.x,bounds.max.z} }, 2);
 
@@ -465,10 +548,13 @@ struct Demo : SokolEngine {
 		setupObjects();
 
 		setupNodes();
+		graphToNode();
+
+		setupNodeLineLinks();
 
 		setupNodeBillboards();
 
-		graphToNode();
+		
 
 		setupBillboard();
 
@@ -674,7 +760,7 @@ struct Demo : SokolEngine {
 		sg_draw(0, 3 * obj.mesh.tris.size(), 1);
 	}
 
-	void testrender(NodeInfo& node,const mat4& view_proj)
+	void node_billboard_render(NodeInfo& node,const mat4& view_proj)
 	{
 		sg_apply_pipeline(default_pip);
 		sg_bindings bind{};
@@ -754,22 +840,22 @@ struct Demo : SokolEngine {
 
 	void renderObjectOutlines()
 	{
-		for (const auto& obj : objects)
-		{
-			sg_apply_pipeline(line_pip);
-
-			sg_bindings bind{};
-			bind.vertex_buffers[0] = obj.linemesh.vbuf;
-			bind.index_buffer = obj.linemesh.ibuf;
-			sg_apply_bindings(bind);
-
-			vs_line_params_t vs_line_params{};
-			mat4 mvp = mat4::mul(cam.view_proj, obj.model);
-			std::memcpy(vs_line_params.u_mvp, mvp.m, sizeof(vs_line_params.u_mvp));
-			sg_apply_uniforms(UB_vs_line_params, SG_RANGE(vs_line_params));
-
-			sg_draw(0, 2 * obj.linemesh.lines.size(), 1);
-		}
+		
+		sg_apply_pipeline(line_pip);
+		
+		sg_bindings bind{};
+		bind.vertex_buffers[0] = nodelines.vbuf;
+		bind.index_buffer = nodelines.ibuf;
+		sg_apply_bindings(bind);
+		
+		vs_line_params_t vs_line_params{};
+		mat4 mvp = mat4::mul(cam.view_proj, mat4::makeIdentity());
+		std::memcpy(vs_line_params.u_mvp, mvp.m, sizeof(vs_line_params.u_mvp));
+		sg_apply_uniforms(UB_vs_line_params, SG_RANGE(vs_line_params));
+		
+		sg_draw(0, 2 * nodelines.lines.size(), 1);
+		
+		 
 	}
 	
 
@@ -798,18 +884,20 @@ struct Demo : SokolEngine {
 		
 		renderObjects(platform, cam.view_proj);
 
-		//for (auto& obj : objects)
-		//{
-		//	
-		//	renderObjects(obj, cam.view_proj);
-		//	
-		//}
+		for (auto& obj : objects)
+		{
+			
+			renderObjects(obj, cam.view_proj);
+			
+		}
 		
 
 		for (auto& n : nodeinfo)
 		{
-			testrender(n, cam.view_proj);
+			node_billboard_render(n, cam.view_proj);
 		}
+
+		renderObjectOutlines();
 		
 		sg_end_pass();
 		
