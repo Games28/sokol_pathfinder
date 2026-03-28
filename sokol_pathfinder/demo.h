@@ -263,16 +263,16 @@ struct Demo : SokolEngine {
 	{
 		int count = 0;
 
-		//for (auto& n : graph.nodes)
+		for (auto& n : graph.nodes)
 		{
 			
 			Object obj;
 			Mesh& m = obj.mesh;
 			m.verts = {
-				{{-.5f, .5f, 0}, {0, 0, 1}, {0, 0}},//tl
-				{{.5f, .5f, 0}, {0, 0, 1}, {1, 0}},//tr
-				{{-.5f, -.5f, 0}, {0, 0, 1}, {0, 1}},//bl
-				{{.5f, -.5f, 0}, {0, 0, 1}, {1, 1}}//br
+				{{0, 0, 0}, {0, 1, 0}, {0, 0}},//tl
+				{{1, 0, 0}, {0, 1, 0}, {1, 0}},//tr
+				{{0, 0, 1}, {0, 1, 0}, {0, 1}},//bl
+				{{1, 0, 1}, {0, 1, 0}, {1, 1}}//br
 			};
 			m.tris = {
 				{0, 2, 1},
@@ -287,8 +287,8 @@ struct Demo : SokolEngine {
 			obj.tex = tex_uv;
 			obj.num_x = 4, obj.num_y = 4;
 			obj.num_ttl = obj.num_x * obj.num_y;
-			//Nodes.push_back(obj);
-			bb_Node = obj;
+			Nodes.push_back(obj);
+			//bb_Node = obj;
 			
 		}
 		
@@ -314,7 +314,7 @@ struct Demo : SokolEngine {
 		nodelines.lines.clear();
 		for (const auto& n : graph.nodes)
 		{
-			for (const auto& o : n->links)
+ 			for (const auto& o : n->links)
 			{
 				nodelines.lines.push_back(LineMesh::IndexLine(lookup[n], lookup[o]));
 			}
@@ -371,6 +371,8 @@ struct Demo : SokolEngine {
 			node.updateMatrixes();
 			nodeinfo.push_back(node);
 		}
+
+		
 	}
 
 	//clear to bluish
@@ -725,7 +727,7 @@ struct Demo : SokolEngine {
 
 		for (auto& n : nodeinfo)
 		{
-			n.updateMatrixes();
+			//n.updateMatrixes();
 			updateNodeBillboard(n, dt);
 			
 		}
@@ -879,7 +881,7 @@ struct Demo : SokolEngine {
 		//premultiply transform
 		 cam_view_proj=mat4::mul(cam_proj, cam_view);
 
-		sg_apply_pipeline(default_pip);
+		//sg_apply_pipeline(default_pip);
 
 		
 		renderObjects(platform, cam.view_proj);
@@ -891,13 +893,13 @@ struct Demo : SokolEngine {
 			
 		}
 		
-
+		renderObjectOutlines();
 		for (auto& n : nodeinfo)
 		{
 			node_billboard_render(n, cam.view_proj);
 		}
 
-		renderObjectOutlines();
+		
 		
 		sg_end_pass();
 		
