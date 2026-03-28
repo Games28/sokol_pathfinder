@@ -736,7 +736,7 @@ struct Demo : SokolEngine {
 
 #pragma region RENDER HELPERS
 
-	void renderNodes(Object& obj, const mat4& view_proj)
+	void renderNodes(Object& obj)
 	{
 		sg_apply_pipeline(default_pip);
 		sg_bindings bind{};
@@ -747,7 +747,7 @@ struct Demo : SokolEngine {
 		sg_apply_bindings(bind);
 
 		//pass transformation matrix
-		mat4 mvp = mat4::mul(view_proj, obj.model);
+		mat4 mvp = mat4::mul(cam.view_proj, obj.model);
 		vs_params_t vs_params{};
 		std::memcpy(vs_params.u_mvp, mvp.m, sizeof(mvp.m));
 		sg_apply_uniforms(UB_vs_params, SG_RANGE(vs_params));
@@ -892,12 +892,20 @@ struct Demo : SokolEngine {
 			renderObjects(obj, cam.view_proj);
 			
 		}
+
+		//this not rendering
+		for (auto& n : Nodes)
+		{
+			renderNodes(n);
+		}
 		
 		renderObjectOutlines();
-		for (auto& n : nodeinfo)
-		{
-			node_billboard_render(n, cam.view_proj);
-		}
+
+		//also not rendering
+		//for (auto& n : nodeinfo)
+		//{
+		//	node_billboard_render(n, cam.view_proj);
+		//}
 
 		
 		
